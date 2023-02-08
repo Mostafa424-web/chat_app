@@ -1,29 +1,21 @@
 import 'package:chat_app/constants.dart';
 import 'package:chat_app/models/messages.dart';
+import 'package:chat_app/views/cubit/chat_cubit/chat_state.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../widgets/chat_buble.dart';
+import 'cubit/chat_cubit/chat_cubit.dart';
 
 class ChatPage extends StatelessWidget {
   static String id = 'ChatPage';
   final _controller = ScrollController();
-  // Create a CollectionReference called users that references the firestore collection
-  CollectionReference messages =
-      FirebaseFirestore.instance.collection(kMessagesCollection);
   TextEditingController controller = TextEditingController();
-
+  List<Message> messagesList = [];
   ChatPage({super.key});
   @override
   Widget build(BuildContext context) {
     String email = ModalRoute.of(context)!.settings.arguments as String;
-    return StreamBuilder<QuerySnapshot>(
-      stream: messages.orderBy(kCreatedAt, descending: true).snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          List<Message> messagesList = [];
-          for (int i = 0; i < snapshot.data!.docs.length; i++) {
-            messagesList.add(Message.fromJson(snapshot.data!.docs[i]));
-          }
           return Scaffold(
             appBar: AppBar(
               automaticallyImplyLeading: false,
@@ -43,28 +35,33 @@ class ChatPage extends StatelessWidget {
             ),
             body: Column(
               children: [
-                Expanded(
-                  child: ListView.builder(
-                    reverse: true,
-                    controller: _controller,
-                    itemCount: messagesList.length,
-                    itemBuilder: (context, index) {
-                      return messagesList[index].id == email ? ChatBubble(
-                        message: messagesList[index],
-                      ): ChatBubbleForFriend(message: messagesList[index]);
-                    },
-                  ),
+                BlocConsumer<ChatCubit , ChatStates>(
+                  listener: (context , state) {
+                    if(state is ChatSuccess){
+                      messagesList = state.messages;
+                    }
+                  },
+                  builder: (context , state) {
+                    return Expanded(
+                      child: ListView.builder(
+                        reverse: true,
+                        controller: _controller,
+                        itemCount: messagesList.length,
+                        itemBuilder: (context, index) {
+                          return messagesList[index].id == email ? ChatBubble(
+                            message: messagesList[index],
+                          ): ChatBubbleForFriend(message: messagesList[index]);
+                        },
+                      ),
+                    );
+                  }
                 ),
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: TextField(
                       controller: controller,
                       onSubmitted: (data) {
-                        messages.add({
-                          kMessage: data,
-                          kCreatedAt: DateTime.now(),
-                          'id' : email,
-                        });
+                        BlocProvider.of<ChatCubit>(context).sendMessage(message: data, email: email);
                         controller.clear();
                         _controller.animateTo(
                             0,
@@ -88,10 +85,5 @@ class ChatPage extends StatelessWidget {
               ],
             ),
           );
-        } else {
-          return const Text('Loading...');
-        }
-      },
-    );
   }
 }
